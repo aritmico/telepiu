@@ -3,175 +3,149 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Match Day - Searchable</title>
+    <title>Sports Scheduler</title>
     <style>
-        body {
-            font-family: 'Inter', -apple-system, sans-serif;
-            background-color: #f3f4f6;
-            margin: 0;
-            padding: 20px;
-            display: flex;
-            justify-content: center;
-        }
+        :root { --primary: #2563eb; --bg: #f3f4f6; --text: #111827; }
+        body { font-family: 'Inter', sans-serif; background: var(--bg); margin: 0; padding: 20px; display: flex; justify-content: center; }
+        .container { width: 100%; max-width: 500px; }
+        
+        /* Search Bar */
+        .search-container { position: sticky; top: 10px; z-index: 10; margin-bottom: 20px; display: flex; align-items: center; background: white; border-radius: 12px; padding: 8px 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .search-container input { border: none; outline: none; flex-grow: 1; padding: 8px; font-size: 1rem; }
+        .clear-search { cursor: pointer; font-size: 1.5rem; color: #9ca3af; display: none; }
 
-        .container {
-            width: 100%;
-            max-width: 500px;
-        }
-
-        /* Search Box Styling */
-        .search-container {
-            position: sticky;
-            top: 10px;
-            z-index: 10;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            background: white;
-            border-radius: 12px;
-            padding: 8px 16px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        }
-
-        .search-container input {
-            border: none;
-            outline: none;
-            flex-grow: 1;
-            padding: 8px;
-            font-size: 1rem;
-        }
-
-        .clear-search {
-            cursor: pointer;
-            font-size: 1.5rem;
-            color: #9ca3af;
-            user-select: none;
-            display: none; /* Hidden by default */
-            padding-left: 10px;
-        }
-
-        .clear-search:hover { color: #111827; }
+        /* Day Headings */
+        .day-heading { margin: 30px 0 15px 5px; font-size: 1.4rem; font-weight: 800; color: var(--primary); text-transform: uppercase; letter-spacing: 1px; }
 
         /* Card Styling */
-        .match-card {
-            background: white;
-            border-radius: 12px;
-            padding: 16px;
-            margin-bottom: 16px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        .time-row { display: flex; justify-content: flex-end; }
-        .time-badge {
-            background-color: #e5e7eb;
-            color: #374151;
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 0.85rem;
-            font-weight: 700;
-        }
-
-        .name-row { font-size: 1.1rem; font-weight: 600; color: #111827; }
-
-        .watch-button {
-            background-color: #2563eb;
-            color: white;
-            text-align: center;
-            text-decoration: none;
-            padding: 10px;
-            border-radius: 8px;
-            font-weight: 600;
-            transition: background 0.2s;
-        }
-        .watch-button:hover { background-color: #1d4ed8; }
-
-        .loading, .no-results { text-align: center; padding: 50px; color: #6b7280; }
+        .match-card { background: white; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: flex; flex-direction: column; gap: 8px; }
+        .row-1 { display: flex; justify-content: space-between; align-items: center; }
+        .time-badge { background: #e5e7eb; color: #374151; padding: 3px 10px; border-radius: 6px; font-size: 0.8rem; font-weight: 700; }
+        .lang-badge { font-size: 0.75rem; color: #6b7280; font-weight: 600; text-transform: uppercase; background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 4px; }
+        .name-row { font-size: 1.05rem; font-weight: 600; color: var(--text); line-height: 1.4; }
+        .watch-button { background: var(--primary); color: white; text-align: center; text-decoration: none; padding: 10px; border-radius: 8px; font-weight: 600; margin-top: 4px; }
+        
+        .loading { text-align: center; padding: 50px; color: #6b7280; }
     </style>
 </head>
 <body>
 
     <div class="container">
         <div class="search-container">
-            <input type="text" id="search-input" placeholder="Search team or match...">
+            <input type="text" id="search-input" placeholder="Search matches...">
             <span id="clear-search" class="clear-search">&times;</span>
         </div>
-
-        <div id="match-list" class="loading">Loading matches...</div>
+        <div id="match-list" class="loading">Loading schedule...</div>
     </div>
 
     <script>
         const PROXY = 'https://corsproxy.io/?';
         const TARGET = 'https://sportsonline.st/prog.txt';
+        const DAYS = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
         
-        const listContainer = document.getElementById('match-list');
-        const searchInput = document.getElementById('search-input');
-        const clearBtn = document.getElementById('clear-search');
+        let allData = []; // Array of { day: 'FRIDAY', matches: [...] }
 
-        let allMatches = []; // Store master list here
-
-        async function fetchMatches() {
+        async function init() {
             try {
                 const response = await fetch(PROXY + encodeURIComponent(TARGET));
                 const text = await response.text();
-                
-                const lines = text.split('\n');
-                const matchPattern = /^(\d{2}:\d{2})\s+(.*?)\s*\|\s*(https?:\/\/[^\s]+)/i;
-
-                allMatches = lines
-                    .map(line => line.trim())
-                    .filter(line => matchPattern.test(line))
-                    .map(line => {
-                        const parts = line.match(matchPattern);
-                        return { time: parts[1], name: parts[2], url: parts[3] };
-                    });
-
-                renderCards(allMatches);
+                parseData(text);
+                render(allData);
             } catch (err) {
-                listContainer.innerHTML = 'Error loading data.';
+                document.getElementById('match-list').innerHTML = 'Load failed.';
             }
         }
 
-        function renderCards(matches) {
-            if (matches.length === 0) {
-                listContainer.innerHTML = '<div class="no-results">No matches found.</div>';
-                return;
-            }
+        function parseData(rawText) {
+            const lines = rawText.split('\n').map(l => l.trim());
+            const langMap = {}; // e.g. { "hd8": "ENGLISH" }
+            let currentDay = "Upcoming Matches";
+            const processedDays = [];
 
-            listContainer.innerHTML = matches.map(m => `
-                <div class="match-card">
-                    <div class="time-row"><span class="time-badge">${m.time}</span></div>
-                    <div class="name-row">${m.name}</div>
-                    <a href="${m.url}" target="_blank" class="watch-button">Watch Live</a>
-                </div>
-            `).join('');
+            const langPattern = /^([A-Z0-9]+)\s+(.+)$/; // Matches "HD2 ENGLISH"
+            const matchPattern = /^(\d{2}:\d{2})\s+(.*?)\s*\|\s*(https?:\/\/[^\s]+)/i;
+
+            lines.forEach(line => {
+                if (!line) return;
+
+                // 1. Detect Day Heading
+                if (DAYS.includes(line.toUpperCase())) {
+                    currentDay = line.toUpperCase();
+                    processedDays.push({ day: currentDay, matches: [] });
+                    return;
+                }
+
+                // 2. Detect Language Legend (e.g., HD8 ENGLISH)
+                if (langPattern.test(line) && !line.includes('|') && !line.includes('https')) {
+                    const [_, code, lang] = line.match(langPattern);
+                    langMap[code.toLowerCase()] = lang;
+                    return;
+                }
+
+                // 3. Detect Match Row
+                if (matchPattern.test(line)) {
+                    const [_, time, name, url] = line.match(matchPattern);
+                    
+                    // Extract language from URL (e.g. ".../hd8.php" -> "hd8")
+                    const fileName = url.split('/').pop().split('.')[0].toLowerCase();
+                    const language = langMap[fileName] || "Multi";
+
+                    if (processedDays.length === 0) processedDays.push({ day: currentDay, matches: [] });
+                    
+                    processedDays[processedDays.length - 1].matches.push({
+                        time, name, url, language
+                    });
+                }
+            });
+
+            allData = processedDays;
         }
 
-        // Search logic
-        searchInput.addEventListener('input', (e) => {
-            const query = e.target.value.toLowerCase();
-            
-            // Show/Hide "X" button
-            clearBtn.style.display = query ? 'block' : 'none';
+        function render(data) {
+            const list = document.getElementById('match-list');
+            let html = '';
 
-            const filtered = allMatches.filter(m => 
-                m.name.toLowerCase().includes(query)
-            );
-            
-            renderCards(filtered);
+            data.forEach(group => {
+                if (group.matches.length === 0) return;
+                
+                html += `<div class="day-heading">${group.day}</div>`;
+                group.matches.forEach(m => {
+                    html += `
+                        <div class="match-card">
+                            <div class="row-1">
+                                <span class="time-badge">${m.time}</span>
+                                <span class="lang-badge">${m.language}</span>
+                            </div>
+                            <div class="name-row">${m.name}</div>
+                            <a href="${m.url}" target="_blank" class="watch-button">Watch Live</a>
+                        </div>
+                    `;
+                });
+            });
+
+            list.innerHTML = html || '<div class="loading">No matches found.</div>';
+        }
+
+        // Search Implementation
+        document.getElementById('search-input').addEventListener('input', (e) => {
+            const q = e.target.value.toLowerCase();
+            document.getElementById('clear-search').style.display = q ? 'block' : 'none';
+
+            const filtered = allData.map(group => ({
+                ...group,
+                matches: group.matches.filter(m => m.name.toLowerCase().includes(q))
+            })).filter(group => group.matches.length > 0);
+
+            render(filtered);
         });
 
-        // Clear search
-        clearBtn.addEventListener('click', () => {
-            searchInput.value = '';
-            clearBtn.style.display = 'none';
-            renderCards(allMatches);
-            searchInput.focus();
-        });
+        document.getElementById('clear-search').onclick = () => {
+            document.getElementById('search-input').value = '';
+            document.getElementById('clear-search').style.display = 'none';
+            render(allData);
+        };
 
-        fetchMatches();
+        init();
     </script>
 </body>
 </html>
