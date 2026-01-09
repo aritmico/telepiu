@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Match Day - Cards</title>
+    <title>Match Day - Searchable</title>
     <style>
         body {
             font-family: 'Inter', -apple-system, sans-serif;
@@ -16,10 +16,43 @@
 
         .container {
             width: 100%;
-            max-width: 500px; /* Thinner container looks better for cards */
+            max-width: 500px;
         }
 
-        /* The Card Container */
+        /* Search Box Styling */
+        .search-container {
+            position: sticky;
+            top: 10px;
+            z-index: 10;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            background: white;
+            border-radius: 12px;
+            padding: 8px 16px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .search-container input {
+            border: none;
+            outline: none;
+            flex-grow: 1;
+            padding: 8px;
+            font-size: 1rem;
+        }
+
+        .clear-search {
+            cursor: pointer;
+            font-size: 1.5rem;
+            color: #9ca3af;
+            user-select: none;
+            display: none; /* Hidden by default */
+            padding-left: 10px;
+        }
+
+        .clear-search:hover { color: #111827; }
+
+        /* Card Styling */
         .match-card {
             background: white;
             border-radius: 12px;
@@ -27,15 +60,11 @@
             margin-bottom: 16px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
             display: flex;
-            flex-direction: column; /* Row 1, 2, 3 vertically */
+            flex-direction: column;
             gap: 12px;
         }
 
-        /* 1) Time Row: Aligned Right with Rounded Background */
-        .time-row {
-            display: flex;
-            justify-content: flex-end;
-        }
+        .time-row { display: flex; justify-content: flex-end; }
         .time-badge {
             background-color: #e5e7eb;
             color: #374151;
@@ -45,15 +74,8 @@
             font-weight: 700;
         }
 
-        /* 2) Name Row */
-        .name-row {
-            font-size: 1.1rem;
-            font-weight: 600;
-            color: #111827;
-            text-align: left;
-        }
+        .name-row { font-size: 1.1rem; font-weight: 600; color: #111827; }
 
-        /* 3) Button Row */
         .watch-button {
             background-color: #2563eb;
             color: white;
@@ -64,79 +86,92 @@
             font-weight: 600;
             transition: background 0.2s;
         }
-        .watch-button:hover {
-            background-color: #1d4ed8;
-        }
+        .watch-button:hover { background-color: #1d4ed8; }
 
-        .loading { text-align: center; padding: 50px; color: #6b7280; }
+        .loading, .no-results { text-align: center; padding: 50px; color: #6b7280; }
     </style>
 </head>
 <body>
 
-    <div class="container" id="app-container">
+    <div class="container">
+        <div class="search-container">
+            <input type="text" id="search-input" placeholder="Search team or match...">
+            <span id="clear-search" class="clear-search">&times;</span>
+        </div>
+
         <div id="match-list" class="loading">Loading matches...</div>
     </div>
 
     <script>
         const PROXY = 'https://corsproxy.io/?';
         const TARGET = 'https://sportsonline.st/prog.txt';
+        
         const listContainer = document.getElementById('match-list');
+        const searchInput = document.getElementById('search-input');
+        const clearBtn = document.getElementById('clear-search');
 
-        async function fetchAndRender() {
+        let allMatches = []; // Store master list here
+
+        async function fetchMatches() {
             try {
                 const response = await fetch(PROXY + encodeURIComponent(TARGET));
                 const text = await response.text();
                 
                 const lines = text.split('\n');
-                // Regex captures: [1] Time, [2] Match Name, [3] URL
                 const matchPattern = /^(\d{2}:\d{2})\s+(.*?)\s*\|\s*(https?:\/\/[^\s]+)/i;
 
-                const matches = lines
+                allMatches = lines
                     .map(line => line.trim())
                     .filter(line => matchPattern.test(line))
                     .map(line => {
                         const parts = line.match(matchPattern);
-                        return {
-                            time: parts[1],
-                            name: parts[2],
-                            url: parts[3]
-                        };
+                        return { time: parts[1], name: parts[2], url: parts[3] };
                     });
 
-                renderCards(matches);
+                renderCards(allMatches);
             } catch (err) {
                 listContainer.innerHTML = 'Error loading data.';
-                console.error(err);
             }
         }
 
         function renderCards(matches) {
             if (matches.length === 0) {
-                listContainer.innerHTML = 'No matches currently scheduled.';
+                listContainer.innerHTML = '<div class="no-results">No matches found.</div>';
                 return;
             }
 
-            // Map the data into the 3-row flex-col card structure
             listContainer.innerHTML = matches.map(m => `
                 <div class="match-card">
-                    <div class="time-row">
-                        <span class="time-badge">${m.time}</span>
-                    </div>
-                    
-                    <div class="name-row">
-                        ${m.name}
-                    </div>
-                    
-                    <a href="${m.url}" target="_blank" class="watch-button">
-                        Watch Live
-                    </a>
+                    <div class="time-row"><span class="time-badge">${m.time}</span></div>
+                    <div class="name-row">${m.name}</div>
+                    <a href="${m.url}" target="_blank" class="watch-button">Watch Live</a>
                 </div>
             `).join('');
-            
-            listContainer.classList.remove('loading');
         }
 
-        fetchAndRender();
+        // Search logic
+        searchInput.addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase();
+            
+            // Show/Hide "X" button
+            clearBtn.style.display = query ? 'block' : 'none';
+
+            const filtered = allMatches.filter(m => 
+                m.name.toLowerCase().includes(query)
+            );
+            
+            renderCards(filtered);
+        });
+
+        // Clear search
+        clearBtn.addEventListener('click', () => {
+            searchInput.value = '';
+            clearBtn.style.display = 'none';
+            renderCards(allMatches);
+            searchInput.focus();
+        });
+
+        fetchMatches();
     </script>
 </body>
 </html>
