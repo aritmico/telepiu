@@ -3,58 +3,78 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Match List Extractor</title>
+    <title>Match Day - Cards</title>
     <style>
         body {
-            font-family: -apple-system, sans-serif;
-            background-color: #f0f2f5;
+            font-family: 'Inter', -apple-system, sans-serif;
+            background-color: #f3f4f6;
+            margin: 0;
             padding: 20px;
             display: flex;
-            flex-direction: column;
-            align-items: center;
+            justify-content: center;
         }
+
         .container {
             width: 100%;
-            max-width: 800px;
-            background: white;
-            padding: 20px;
-            border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            max-width: 500px; /* Thinner container looks better for cards */
         }
-        h2 { color: #1a73e8; border-bottom: 2px solid #eee; padding-bottom: 10px; }
-        
-        .match-row {
-            padding: 12px;
-            border-bottom: 1px solid #eee;
+
+        /* The Card Container */
+        .match-card {
+            background: white;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
             display: flex;
-            justify-content: space-between;
-            align-items: center;
+            flex-direction: column; /* Row 1, 2, 3 vertically */
+            gap: 12px;
+        }
+
+        /* 1) Time Row: Aligned Right with Rounded Background */
+        .time-row {
+            display: flex;
+            justify-content: flex-end;
+        }
+        .time-badge {
+            background-color: #e5e7eb;
+            color: #374151;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 700;
+        }
+
+        /* 2) Name Row */
+        .name-row {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #111827;
+            text-align: left;
+        }
+
+        /* 3) Button Row */
+        .watch-button {
+            background-color: #2563eb;
+            color: white;
+            text-align: center;
+            text-decoration: none;
+            padding: 10px;
+            border-radius: 8px;
+            font-weight: 600;
             transition: background 0.2s;
         }
-        .match-row:hover { background: #f8f9fa; }
-        .match-row:last-child { border-bottom: none; }
-
-        .match-info { font-weight: 500; color: #333; }
-        
-        .btn-link {
-            background: #1a73e8;
-            color: white;
-            text-decoration: none;
-            padding: 6px 14px;
-            border-radius: 6px;
-            font-size: 0.9rem;
-            font-weight: bold;
+        .watch-button:hover {
+            background-color: #1d4ed8;
         }
-        .btn-link:hover { background: #1557b0; }
 
-        .loading { text-align: center; color: #666; padding: 40px; }
+        .loading { text-align: center; padding: 50px; color: #6b7280; }
     </style>
 </head>
 <body>
 
-    <div class="container">
-        <h2>Today's Matches</h2>
-        <div id="match-list" class="loading">Fetching and filtering matches...</div>
+    <div class="container" id="app-container">
+        <div id="match-list" class="loading">Loading matches...</div>
     </div>
 
     <script>
@@ -62,54 +82,61 @@
         const TARGET = 'https://sportsonline.st/prog.txt';
         const listContainer = document.getElementById('match-list');
 
-        async function fetchMatches() {
+        async function fetchAndRender() {
             try {
                 const response = await fetch(PROXY + encodeURIComponent(TARGET));
                 const text = await response.text();
                 
-                // 1. Split text into individual lines
                 const lines = text.split('\n');
+                // Regex captures: [1] Time, [2] Match Name, [3] URL
+                const matchPattern = /^(\d{2}:\d{2})\s+(.*?)\s*\|\s*(https?:\/\/[^\s]+)/i;
 
-                // 2. Define the regex pattern:
-                // ^\d{2}:\d{2} -> Starts with 00:00 format
-                // .*\|         -> Any characters until the pipe symbol
-                // \s*https?    -> Optional spaces followed by the link
-                const matchPattern = /^(\d{2}:\d{2}.*?)\|\s*(https?:\/\/[^\s]+)/i;
-
-                const filteredRows = lines
+                const matches = lines
                     .map(line => line.trim())
-                    .filter(line => matchPattern.test(line)) // Only keep match lines
+                    .filter(line => matchPattern.test(line))
                     .map(line => {
                         const parts = line.match(matchPattern);
                         return {
-                            info: parts[1].trim(),
-                            url: parts[2].trim()
+                            time: parts[1],
+                            name: parts[2],
+                            url: parts[3]
                         };
                     });
 
-                renderMatches(filteredRows);
-
+                renderCards(matches);
             } catch (err) {
-                listContainer.innerHTML = 'Failed to load match data.';
+                listContainer.innerHTML = 'Error loading data.';
                 console.error(err);
             }
         }
 
-        function renderMatches(matches) {
+        function renderCards(matches) {
             if (matches.length === 0) {
-                listContainer.innerHTML = 'No matches found.';
+                listContainer.innerHTML = 'No matches currently scheduled.';
                 return;
             }
 
+            // Map the data into the 3-row flex-col card structure
             listContainer.innerHTML = matches.map(m => `
-                <div class="match-row">
-                    <span class="match-info">${m.info}</span>
-                    <a href="${m.url}" class="btn-link" target="_blank">Watch</a>
+                <div class="match-card">
+                    <div class="time-row">
+                        <span class="time-badge">${m.time}</span>
+                    </div>
+                    
+                    <div class="name-row">
+                        ${m.name}
+                    </div>
+                    
+                    <a href="${m.url}" target="_blank" class="watch-button">
+                        Watch Live
+                    </a>
                 </div>
             `).join('');
+            
+            listContainer.classList.remove('loading');
         }
 
-        fetchMatches();
+        fetchAndRender();
     </script>
 </body>
 </html>
