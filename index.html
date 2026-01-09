@@ -9,15 +9,12 @@
         body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); margin: 0; padding: 20px; display: flex; justify-content: center; }
         .container { width: 100%; max-width: 500px; }
         
-        /* Barra di Ricerca */
         .search-container { position: sticky; top: 10px; z-index: 10; margin-bottom: 20px; display: flex; align-items: center; background: white; border-radius: 12px; padding: 8px 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
         .search-container input { border: none; outline: none; flex-grow: 1; padding: 8px; font-size: 1rem; }
         .clear-search { cursor: pointer; font-size: 1.5rem; color: #9ca3af; display: none; }
 
-        /* Intestazioni Giorni */
         .day-heading { margin: 30px 0 15px 5px; font-size: 1.4rem; font-weight: 800; color: var(--primary); text-transform: uppercase; letter-spacing: 1px; }
 
-        /* Card Partita */
         .match-card { background: white; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: flex; flex-direction: column; gap: 8px; }
         .row-1 { display: flex; justify-content: space-between; align-items: center; }
         .time-badge { background: #e5e7eb; color: #374151; padding: 3px 10px; border-radius: 6px; font-size: 0.8rem; font-weight: 700; }
@@ -32,135 +29,150 @@
 </head>
 <body>
 
-    <div class="container">
-        <div class="search-container">
-            <input type="text" id="search-input" placeholder="Cerca partita o squadra...">
-            <span id="clear-search" class="clear-search">&times;</span>
-        </div>
-        
-        <div id="match-list" class="loading">Caricamento programma in corso...</div>
+<div class="container">
+    <div class="search-container">
+        <input type="text" id="search-input" placeholder="Cerca partita o squadra...">
+        <span id="clear-search" class="clear-search">&times;</span>
     </div>
+    
+    <div id="match-list" class="loading">Caricamento programma in corso...</div>
+</div>
 
-    <script>
-        const PROXY = 'https://corsproxy.io/?';
-        const TARGET = 'https://sportsonline.st/prog.txt';
-        
-        // Giorni da monitorare nel file di testo
-        const GIORNI = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY', 
-                        'LUNEDÌ', 'MARTEDÌ', 'MERCOLEDÌ', 'GIOVEDÌ', 'VENERDÌ', 'SABATO', 'DOMENICA'];
-        
-        // Traduzione per la visualizzazione
-        const TRADUZIONE_GIORNI = {
-            'MONDAY': 'Lunedì', 'TUESDAY': 'Martedì', 'WEDNESDAY': 'Mercoledì', 
-            'THURSDAY': 'Giovedì', 'FRIDAY': 'Venerdì', 'SATURDAY': 'Sabato', 'SUNDAY': 'Domenica'
-        };
+<script>
+    const PROXY_URL = 'https://corsproxy.io/?';
+    const DATA_SOURCE = 'https://sportsonline.st/prog.txt';
 
-        let tuttiIDati = []; 
+    const DAYS = [
+        'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY',
+        'FRIDAY', 'SATURDAY', 'SUNDAY',
+        'LUNEDÌ', 'MARTEDÌ', 'MERCOLEDÌ',
+        'GIOVEDÌ', 'VENERDÌ', 'SABATO', 'DOMENICA'
+    ];
 
-        async function init() {
-            try {
-                const response = await fetch(PROXY + encodeURIComponent(TARGET));
-                const text = await response.text();
-                analizzaDati(text);
-                renderizza(tuttiIDati);
-            } catch (err) {
-                document.getElementById('match-list').innerHTML = 'Errore nel caricamento dei dati.';
-                console.error(err);
+    const DAY_TRANSLATION = {
+        'MONDAY': 'Lunedì',
+        'TUESDAY': 'Martedì',
+        'WEDNESDAY': 'Mercoledì',
+        'THURSDAY': 'Giovedì',
+        'FRIDAY': 'Venerdì',
+        'SATURDAY': 'Sabato',
+        'SUNDAY': 'Domenica'
+    };
+
+    let allData = [];
+
+    async function init() {
+        try {
+            const response = await fetch(PROXY_URL + encodeURIComponent(DATA_SOURCE));
+            const text = await response.text();
+            parseData(text);
+            render(allData);
+        } catch (error) {
+            document.getElementById('match-list').innerHTML = 'Errore nel caricamento dei dati.';
+            console.error(error);
+        }
+    }
+
+    function parseData(rawText) {
+        const lines = rawText.split('\n').map(line => line.trim());
+        const languageMap = {};
+        let currentDay = 'Prossimi Eventi';
+        const processedDays = [];
+
+        const languagePattern = /^([A-Z0-9]+)\s+(.+)$/;
+        const matchPattern = /^(\d{2}:\d{2})\s+(.*?)\s*\|\s*(https?:\/\/[^\s]+)/i;
+
+        lines.forEach(line => {
+            if (!line) return;
+
+            if (DAYS.includes(line.toUpperCase())) {
+                const dayKey = line.toUpperCase();
+                currentDay = DAY_TRANSLATION[dayKey] || dayKey;
+                processedDays.push({ day: currentDay, matches: [] });
+                return;
             }
-        }
 
-        function analizzaDati(testoGrezzo) {
-            const righe = testoGrezzo.split('\n').map(r => r.trim());
-            const mappaLingue = {}; 
-            let giornoCorrente = "Prossimi Eventi";
-            const giorniElaborati = [];
+            if (languagePattern.test(line) && !line.includes('|') && !line.includes('https')) {
+                const [, code, language] = line.match(languagePattern);
+                languageMap[code.toLowerCase()] = language
+                    .replace('ENGLISH', 'INGLESE')
+                    .replace('SPANISH', 'SPAGNOLO')
+                    .replace('GERMAN', 'TEDESCO')
+                    .replace('ITALIAN', 'ITALIANO')
+                    .replace('BRAZILIAN', 'PORTOGHESE');
+                return;
+            }
 
-            const patternLingua = /^([A-Z0-9]+)\s+(.+)$/; 
-            const patternPartita = /^(\d{2}:\d{2})\s+(.*?)\s*\|\s*(https?:\/\/[^\s]+)/i;
+            if (matchPattern.test(line)) {
+                const [, time, name, url] = line.match(matchPattern);
+                const fileKey = url.split('/').pop().split('.')[0].toLowerCase();
+                const language = languageMap[fileKey] || 'Multilingua';
 
-            righe.forEach(riga => {
-                if (!riga) return;
-
-                // 1. Identifica Intestazione Giorno
-                if (GIORNI.includes(riga.toUpperCase())) {
-                    const giornoKey = riga.toUpperCase();
-                    giornoCorrente = TRADUZIONE_GIORNI[giornoKey] || giornoKey;
-                    giorniElaborati.push({ giorno: giornoCorrente, partite: [] });
-                    return;
+                if (processedDays.length === 0) {
+                    processedDays.push({ day: currentDay, matches: [] });
                 }
 
-                // 2. Identifica Legenda Lingue (es. HD8 ENGLISH)
-                if (patternLingua.test(riga) && !riga.includes('|') && !riga.includes('https')) {
-                    const [_, codice, lingua] = riga.match(patternLingua);
-                    mappaLingue[codice.toLowerCase()] = lingua.replace('ENGLISH', 'INGLESE').replace('SPANISH', 'SPAGNOLO').replace('GERMAN', 'TEDESCO').replace('BRAZILIAN', 'PORTOGHESE');
-                    return;
-                }
-
-                // 3. Identifica Riga Partita
-                if (patternPartita.test(riga)) {
-                    const [_, ora, nome, url] = riga.match(patternPartita);
-                    
-                    const nomeFile = url.split('/').pop().split('.')[0].toLowerCase();
-                    const lingua = mappaLingue[nomeFile] || "Multilingua";
-
-                    if (giorniElaborati.length === 0) giorniElaborati.push({ giorno: giornoCorrente, partite: [] });
-                    
-                    giorniElaborati[giorniElaborati.length - 1].partite.push({
-                        ora, nome, url, lingua
-                    });
-                }
-            });
-
-            tuttiIDati = giorniElaborati;
-        }
-
-        function renderizza(dati) {
-            const lista = document.getElementById('match-list');
-            let html = '';
-
-            dati.forEach(gruppo => {
-                if (gruppo.partite.length === 0) return;
-                
-                html += `<div class="day-heading">${gruppo.giorno}</div>`;
-                gruppo.partite.forEach(p => {
-                    html += `
-                        <div class="match-card">
-                            <div class="row-1">
-                                <span class="time-badge">${p.ora}</span>
-                                <span class="lang-badge">${p.lingua}</span>
-                            </div>
-                            <div class="name-row">${p.nome}</div>
-                            <a href="${p.url}" target="_blank" class="watch-button">Guarda Ora</a>
-                        </div>
-                    `;
+                processedDays[processedDays.length - 1].matches.push({
+                    time,
+                    name,
+                    url,
+                    language
                 });
-            });
-
-            lista.innerHTML = html || '<div class="no-results">Nessuna partita trovata.</div>';
-        }
-
-        // Logica di Ricerca
-        document.getElementById('search-input').addEventListener('input', (e) => {
-            const query = e.target.value.toLowerCase();
-            document.getElementById('clear-search').style.display = query ? 'block' : 'none';
-
-            const filtrati = tuttiIDati.map(gruppo => ({
-                ...gruppo,
-                partite: gruppo.partite.filter(p => p.nome.toLowerCase().includes(query))
-            })).filter(gruppo => gruppo.partite.length > 0);
-
-            renderizza(filtrati);
+            }
         });
 
-        // Pulisci Ricerca
-        document.getElementById('clear-search').onclick = () => {
-            document.getElementById('search-input').value = '';
-            document.getElementById('clear-search').style.display = 'none';
-            renderizza(tuttiIDati);
-            document.getElementById('search-input').focus();
-        };
+        allData = processedDays;
+    }
 
-        init();
-    </script>
+    function render(data) {
+        const list = document.getElementById('match-list');
+        let html = '';
+
+        data.forEach(group => {
+            if (group.matches.length === 0) return;
+
+            html += `<div class="day-heading">${group.day}</div>`;
+            group.matches.forEach(match => {
+                html += `
+                    <div class="match-card">
+                        <div class="row-1">
+                            <span class="time-badge">${match.time}</span>
+                            <span class="lang-badge">${match.language}</span>
+                        </div>
+                        <div class="name-row">${match.name}</div>
+                        <a href="${match.url}" target="_blank" class="watch-button">Guarda Ora</a>
+                    </div>
+                `;
+            });
+        });
+
+        list.innerHTML = html || '<div class="no-results">Nessuna partita trovata.</div>';
+    }
+
+    document.getElementById('search-input').addEventListener('input', event => {
+        const query = event.target.value.toLowerCase();
+        document.getElementById('clear-search').style.display = query ? 'block' : 'none';
+
+        const filtered = allData
+            .map(group => ({
+                ...group,
+                matches: group.matches.filter(m => m.name.toLowerCase().includes(query))
+            }))
+            .filter(group => group.matches.length > 0);
+
+        render(filtered);
+    });
+
+    document.getElementById('clear-search').onclick = () => {
+        const input = document.getElementById('search-input');
+        input.value = '';
+        document.getElementById('clear-search').style.display = 'none';
+        render(allData);
+        input.focus();
+    };
+
+    init();
+</script>
+
 </body>
 </html>
