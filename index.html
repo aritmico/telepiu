@@ -1,148 +1,163 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="it">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sports Scheduler</title>
+    <title>Palinsesto Sportivo</title>
     <style>
         :root { --primary: #2563eb; --bg: #f3f4f6; --text: #111827; }
-        body { font-family: 'Inter', sans-serif; background: var(--bg); margin: 0; padding: 20px; display: flex; justify-content: center; }
+        body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); margin: 0; padding: 20px; display: flex; justify-content: center; }
         .container { width: 100%; max-width: 500px; }
         
-        /* Search Bar */
+        /* Barra di Ricerca */
         .search-container { position: sticky; top: 10px; z-index: 10; margin-bottom: 20px; display: flex; align-items: center; background: white; border-radius: 12px; padding: 8px 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
         .search-container input { border: none; outline: none; flex-grow: 1; padding: 8px; font-size: 1rem; }
         .clear-search { cursor: pointer; font-size: 1.5rem; color: #9ca3af; display: none; }
 
-        /* Day Headings */
+        /* Intestazioni Giorni */
         .day-heading { margin: 30px 0 15px 5px; font-size: 1.4rem; font-weight: 800; color: var(--primary); text-transform: uppercase; letter-spacing: 1px; }
 
-        /* Card Styling */
+        /* Card Partita */
         .match-card { background: white; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: flex; flex-direction: column; gap: 8px; }
         .row-1 { display: flex; justify-content: space-between; align-items: center; }
         .time-badge { background: #e5e7eb; color: #374151; padding: 3px 10px; border-radius: 6px; font-size: 0.8rem; font-weight: 700; }
-        .lang-badge { font-size: 0.75rem; color: #6b7280; font-weight: 600; text-transform: uppercase; background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 4px; }
+        .lang-badge { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 4px; }
         .name-row { font-size: 1.05rem; font-weight: 600; color: var(--text); line-height: 1.4; }
-        .watch-button { background: var(--primary); color: white; text-align: center; text-decoration: none; padding: 10px; border-radius: 8px; font-weight: 600; margin-top: 4px; }
+        .watch-button { background: var(--primary); color: white; text-align: center; text-decoration: none; padding: 10px; border-radius: 8px; font-weight: 600; margin-top: 4px; transition: opacity 0.2s; }
+        .watch-button:hover { opacity: 0.9; }
         
         .loading { text-align: center; padding: 50px; color: #6b7280; }
+        .no-results { text-align: center; padding: 30px; color: #6b7280; font-style: italic; }
     </style>
 </head>
 <body>
 
     <div class="container">
         <div class="search-container">
-            <input type="text" id="search-input" placeholder="Search matches...">
+            <input type="text" id="search-input" placeholder="Cerca partita o squadra...">
             <span id="clear-search" class="clear-search">&times;</span>
         </div>
-        <div id="match-list" class="loading">Loading schedule...</div>
+        
+        <div id="match-list" class="loading">Caricamento programma in corso...</div>
     </div>
 
     <script>
         const PROXY = 'https://corsproxy.io/?';
         const TARGET = 'https://sportsonline.st/prog.txt';
-        const DAYS = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
         
-        let allData = []; // Array of { day: 'FRIDAY', matches: [...] }
+        // Giorni da monitorare nel file di testo
+        const GIORNI = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY', 
+                        'LUNEDÌ', 'MARTEDÌ', 'MERCOLEDÌ', 'GIOVEDÌ', 'VENERDÌ', 'SABATO', 'DOMENICA'];
+        
+        // Traduzione per la visualizzazione
+        const TRADUZIONE_GIORNI = {
+            'MONDAY': 'Lunedì', 'TUESDAY': 'Martedì', 'WEDNESDAY': 'Mercoledì', 
+            'THURSDAY': 'Giovedì', 'FRIDAY': 'Venerdì', 'SATURDAY': 'Sabato', 'SUNDAY': 'Domenica'
+        };
+
+        let tuttiIDati = []; 
 
         async function init() {
             try {
                 const response = await fetch(PROXY + encodeURIComponent(TARGET));
                 const text = await response.text();
-                parseData(text);
-                render(allData);
+                analizzaDati(text);
+                renderizza(tuttiIDati);
             } catch (err) {
-                document.getElementById('match-list').innerHTML = 'Load failed.';
+                document.getElementById('match-list').innerHTML = 'Errore nel caricamento dei dati.';
+                console.error(err);
             }
         }
 
-        function parseData(rawText) {
-            const lines = rawText.split('\n').map(l => l.trim());
-            const langMap = {}; // e.g. { "hd8": "ENGLISH" }
-            let currentDay = "Upcoming Matches";
-            const processedDays = [];
+        function analizzaDati(testoGrezzo) {
+            const righe = testoGrezzo.split('\n').map(r => r.trim());
+            const mappaLingue = {}; 
+            let giornoCorrente = "Prossimi Eventi";
+            const giorniElaborati = [];
 
-            const langPattern = /^([A-Z0-9]+)\s+(.+)$/; // Matches "HD2 ENGLISH"
-            const matchPattern = /^(\d{2}:\d{2})\s+(.*?)\s*\|\s*(https?:\/\/[^\s]+)/i;
+            const patternLingua = /^([A-Z0-9]+)\s+(.+)$/; 
+            const patternPartita = /^(\d{2}:\d{2})\s+(.*?)\s*\|\s*(https?:\/\/[^\s]+)/i;
 
-            lines.forEach(line => {
-                if (!line) return;
+            righe.forEach(riga => {
+                if (!riga) return;
 
-                // 1. Detect Day Heading
-                if (DAYS.includes(line.toUpperCase())) {
-                    currentDay = line.toUpperCase();
-                    processedDays.push({ day: currentDay, matches: [] });
+                // 1. Identifica Intestazione Giorno
+                if (GIORNI.includes(riga.toUpperCase())) {
+                    const giornoKey = riga.toUpperCase();
+                    giornoCorrente = TRADUZIONE_GIORNI[giornoKey] || giornoKey;
+                    giorniElaborati.push({ giorno: giornoCorrente, partite: [] });
                     return;
                 }
 
-                // 2. Detect Language Legend (e.g., HD8 ENGLISH)
-                if (langPattern.test(line) && !line.includes('|') && !line.includes('https')) {
-                    const [_, code, lang] = line.match(langPattern);
-                    langMap[code.toLowerCase()] = lang;
+                // 2. Identifica Legenda Lingue (es. HD8 ENGLISH)
+                if (patternLingua.test(riga) && !riga.includes('|') && !riga.includes('https')) {
+                    const [_, codice, lingua] = riga.match(patternLingua);
+                    mappaLingue[codice.toLowerCase()] = lingua.replace('ENGLISH', 'INGLESE').replace('SPANISH', 'SPAGNOLO').replace('GERMAN', 'TEDESCO').replace('BRAZILIAN', 'PORTOGHESE');
                     return;
                 }
 
-                // 3. Detect Match Row
-                if (matchPattern.test(line)) {
-                    const [_, time, name, url] = line.match(matchPattern);
+                // 3. Identifica Riga Partita
+                if (patternPartita.test(riga)) {
+                    const [_, ora, nome, url] = riga.match(patternPartita);
                     
-                    // Extract language from URL (e.g. ".../hd8.php" -> "hd8")
-                    const fileName = url.split('/').pop().split('.')[0].toLowerCase();
-                    const language = langMap[fileName] || "Multi";
+                    const nomeFile = url.split('/').pop().split('.')[0].toLowerCase();
+                    const lingua = mappaLingue[nomeFile] || "Multilingua";
 
-                    if (processedDays.length === 0) processedDays.push({ day: currentDay, matches: [] });
+                    if (giorniElaborati.length === 0) giorniElaborati.push({ giorno: giornoCorrente, partite: [] });
                     
-                    processedDays[processedDays.length - 1].matches.push({
-                        time, name, url, language
+                    giorniElaborati[giorniElaborati.length - 1].partite.push({
+                        ora, nome, url, lingua
                     });
                 }
             });
 
-            allData = processedDays;
+            tuttiIDati = giorniElaborati;
         }
 
-        function render(data) {
-            const list = document.getElementById('match-list');
+        function renderizza(dati) {
+            const lista = document.getElementById('match-list');
             let html = '';
 
-            data.forEach(group => {
-                if (group.matches.length === 0) return;
+            dati.forEach(gruppo => {
+                if (gruppo.partite.length === 0) return;
                 
-                html += `<div class="day-heading">${group.day}</div>`;
-                group.matches.forEach(m => {
+                html += `<div class="day-heading">${gruppo.giorno}</div>`;
+                gruppo.partite.forEach(p => {
                     html += `
                         <div class="match-card">
                             <div class="row-1">
-                                <span class="time-badge">${m.time}</span>
-                                <span class="lang-badge">${m.language}</span>
+                                <span class="time-badge">${p.ora}</span>
+                                <span class="lang-badge">${p.lingua}</span>
                             </div>
-                            <div class="name-row">${m.name}</div>
-                            <a href="${m.url}" target="_blank" class="watch-button">Watch Live</a>
+                            <div class="name-row">${p.nome}</div>
+                            <a href="${p.url}" target="_blank" class="watch-button">Guarda Ora</a>
                         </div>
                     `;
                 });
             });
 
-            list.innerHTML = html || '<div class="loading">No matches found.</div>';
+            lista.innerHTML = html || '<div class="no-results">Nessuna partita trovata.</div>';
         }
 
-        // Search Implementation
+        // Logica di Ricerca
         document.getElementById('search-input').addEventListener('input', (e) => {
-            const q = e.target.value.toLowerCase();
-            document.getElementById('clear-search').style.display = q ? 'block' : 'none';
+            const query = e.target.value.toLowerCase();
+            document.getElementById('clear-search').style.display = query ? 'block' : 'none';
 
-            const filtered = allData.map(group => ({
-                ...group,
-                matches: group.matches.filter(m => m.name.toLowerCase().includes(q))
-            })).filter(group => group.matches.length > 0);
+            const filtrati = tuttiIDati.map(gruppo => ({
+                ...gruppo,
+                partite: gruppo.partite.filter(p => p.nome.toLowerCase().includes(query))
+            })).filter(gruppo => gruppo.partite.length > 0);
 
-            render(filtered);
+            renderizza(filtrati);
         });
 
+        // Pulisci Ricerca
         document.getElementById('clear-search').onclick = () => {
             document.getElementById('search-input').value = '';
             document.getElementById('clear-search').style.display = 'none';
-            render(allData);
+            renderizza(tuttiIDati);
+            document.getElementById('search-input').focus();
         };
 
         init();
