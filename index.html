@@ -83,7 +83,7 @@
             border: 1px solid var(--border);
         }
         .lang-badge {
-            font-size: 0.65rem;
+            font-size: 0.8rem;
             font-weight: 700;
             letter-spacing: 1px;
             text-transform: uppercase;
@@ -91,6 +91,12 @@
             color: #17C8AB;
             padding: 4px 10px;
             border-radius: 999px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .lang-icon {
+            font-size: 1rem;
         }
         .name-row {
             font-size: 1.2rem;
@@ -98,7 +104,7 @@
             line-height: 1.5;
             color: var(--text);
         }
-        .watch-button-wrapper { display: flex; justify-content: center; }
+        .watch-button-wrapper { display: flex; flex-direction: column; align-items: center; gap: 24px;}
         .watch-button {
             background: linear-gradient(135deg, #17C8AB, #0fd3bc);
             color: #111827;
@@ -242,12 +248,13 @@
                     <a href="${match.url}" target="_blank">
                         <div class="match-card">
                             <div class="row-1">
-                                <span class="time-badge">${match.time}</span>
-                                ${match.language ? `<span class="lang-badge">${match.language}</span>` : ''}
+                                <span class="time-badge">${match.time} UK</span>
+                                <span class="time-badge">${String((parseInt(match.time.split(':')[0], 10) + 1) % 24).padStart(2,'0')}:${match.time.split(':')[1]} IT</span>
                             </div>
-                            <div class="name-row">${match.name.replace(/\s+x\s+/gi, '<br /><span class="vs">contro</span><br />')}</div>
+                            <div class="name-row">${match.name.replace(/^NBA:\s*/i, '').replace(/\s+x\s+/gi, '<br /><span class="vs">contro</span><br />').replace(/\s+@\s+/gi, '<br /><span class="vs">contro</span><br />')}</div>
                             <div class="watch-button-wrapper">
                                 <span class="watch-button">Guarda Ora</span>
+                                ${match.language ? `<span class="lang-badge"><span class="lang-icon">🎙️</span> ${match.language}</span>` : ''}
                             </div>
                         </div>
                     </a>
