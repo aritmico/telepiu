@@ -1,4 +1,4 @@
-const PROXY_URL = 'https://corsproxy.io/?';
+const PROXY_URL = 'https://corsproxy.io/?key=04205805&url=';
 const DATA_SOURCE = 'https://sportsonline.st/prog.txt';
 
 const DAYS = [
